@@ -21,6 +21,66 @@ document.querySelectorAll('.tab').forEach((btn) => {
   });
 });
 
+// --- Usage / credits ---
+function pickNumeric(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const keys = ['credits', 'credit', 'balance', 'remaining', 'remaining_credits', 'total_remaining', 'available'];
+  for (const k of keys) {
+    if (typeof obj[k] === 'number') return { label: k, value: obj[k] };
+    if (obj[k] && typeof obj[k] === 'object') {
+      const inner = pickNumeric(obj[k]);
+      if (inner) return inner;
+    }
+  }
+  return null;
+}
+
+function pickTokens(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const keys = ['total_tokens', 'tokens', 'tokens_used', 'usage_tokens'];
+  for (const k of keys) {
+    if (typeof obj[k] === 'number') return obj[k];
+    if (obj[k] && typeof obj[k] === 'object') {
+      const inner = pickTokens(obj[k]);
+      if (inner != null) return inner;
+    }
+  }
+  return null;
+}
+
+async function loadUsage() {
+  const el = $('usage');
+  el.classList.remove('bad');
+  el.textContent = 'credits …';
+  try {
+    const r = await fetch('/api/usage');
+    const data = await r.json();
+    if (!r.ok) {
+      el.textContent = 'credits ej tillgängligt';
+      el.classList.add('bad');
+      el.title = data.tried ? `Försökte:\n${data.tried.map((t) => `${t.path} → ${t.status ?? t.error}`).join('\n')}` : (data.error || '');
+      return;
+    }
+    const info = pickNumeric(data.data);
+    const tokens = pickTokens(data.data);
+    const parts = [];
+    if (info) parts.push(`${info.label}: ${info.value}`);
+    if (tokens != null) parts.push(`${tokens.toLocaleString()} tok`);
+    el.textContent = parts.length ? parts.join(' · ') : `via ${data.path}`;
+    el.title = `${data.path}\n${JSON.stringify(data.data, null, 2)}`;
+  } catch (err) {
+    el.textContent = 'credits fel';
+    el.classList.add('bad');
+    el.title = err.message;
+  }
+}
+
+$('usage').addEventListener('click', (e) => {
+  if (e.metaKey || e.ctrlKey) return;
+  e.preventDefault();
+  loadUsage();
+});
+
 // --- Status / config ---
 async function loadConfig() {
   const status = $('status');
@@ -58,7 +118,9 @@ function renderModelSelects() {
   const chatSel = $('chat-model');
   const sttSel = $('stt-model');
   const embSel = $('emb-model');
-  for (const sel of [chatSel, sttSel, embSel]) sel.innerHTML = '';
+  const kbChatSel = $('kb-chat-model');
+  const kbEmbSel = $('kb-emb-model');
+  for (const sel of [chatSel, sttSel, embSel, kbChatSel, kbEmbSel]) sel.innerHTML = '';
 
   const chatModels = [];
   const sttModels = [];
@@ -89,6 +151,8 @@ function renderModelSelects() {
   fill(chatSel, chatModels, 'chat-modeller');
   fill(sttSel, sttModels, 'stt-modeller');
   fill(embSel, embModels, 'embedding-modeller');
+  fill(kbChatSel, chatModels, 'chat-modeller');
+  fill(kbEmbSel, embModels, 'embedding-modeller');
 }
 
 function renderModelsList(filter = '') {
@@ -405,5 +469,212 @@ $('emb-run').addEventListener('click', async () => {
   }
 });
 
+// --- Knowledge base ---
+const kb = {
+  chat: [],
+};
+
+async function refreshKbStatus() {
+  try {
+    const r = await fetch('/api/kb');
+    const data = await r.json();
+    $('kb-prompt-status').textContent = data.systemPromptName
+      ? `${data.systemPromptName} · ${data.systemPromptLength} tecken`
+      : 'Ingen prompt vald';
+    const list = $('kb-doc-list');
+    list.innerHTML = '';
+    for (const doc of data.documents) {
+      const li = document.createElement('li');
+      li.textContent = `${doc.name} · ${doc.pages} sidor · ${doc.chunks} chunks`;
+      list.appendChild(li);
+    }
+    $('kb-pdf-status').textContent = data.documents.length
+      ? `${data.documents.length} dokument · embedding-modell: ${data.embeddingModel}`
+      : '';
+  } catch {}
+}
+
+$('kb-prompt-file').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  $('kb-prompt-status').textContent = `Laddar upp ${file.name}…`;
+  try {
+    const r = await fetch('/api/kb/prompt', { method: 'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.text();
+      $('kb-prompt-status').textContent = `Fel: ${err}`;
+      return;
+    }
+    await refreshKbStatus();
+  } catch (err) {
+    $('kb-prompt-status').textContent = `Fel: ${err.message}`;
+  }
+  e.target.value = '';
+});
+
+$('kb-pdf-file').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  if (files.length === 0) return;
+  const model = $('kb-emb-model').value;
+  if (!model) { alert('Välj en embedding-modell.'); e.target.value = ''; return; }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    $('kb-pdf-status').textContent = `(${i + 1}/${files.length}) Bearbetar ${file.name}…`;
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('embedding_model', model);
+    try {
+      const r = await fetch('/api/kb/pdf', { method: 'POST', body: fd });
+      if (!r.ok) {
+        const err = await r.text();
+        $('kb-pdf-status').textContent = `Fel på ${file.name}: ${err}`;
+        break;
+      }
+    } catch (err) {
+      $('kb-pdf-status').textContent = `Fel: ${err.message}`;
+      break;
+    }
+  }
+  e.target.value = '';
+  await refreshKbStatus();
+});
+
+$('kb-clear').addEventListener('click', async () => {
+  if (!confirm('Rensa all uppladdad kunskap?')) return;
+  await fetch('/api/kb', { method: 'DELETE' });
+  kb.chat = [];
+  $('kb-log').innerHTML = '';
+  await refreshKbStatus();
+});
+
+function appendKbMessage(role, content) {
+  const log = $('kb-log');
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  const roleEl = document.createElement('div');
+  roleEl.className = 'role';
+  roleEl.textContent = role;
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.textContent = content;
+  el.appendChild(roleEl);
+  el.appendChild(body);
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return { el, body };
+}
+
+function appendKbSources(sources) {
+  if (!sources || sources.length === 0) return;
+  const log = $('kb-log');
+  const el = document.createElement('div');
+  el.className = 'msg sources';
+  el.innerHTML = '<div class="role">källor</div>';
+  for (const s of sources) {
+    const item = document.createElement('div');
+    item.className = 'source-item';
+    const head = document.createElement('div');
+    head.className = 'source-head';
+    head.textContent = `${s.source} · chunk ${s.chunk} · score ${s.score}`;
+    const preview = document.createElement('div');
+    preview.className = 'source-preview';
+    preview.textContent = s.preview;
+    item.appendChild(head);
+    item.appendChild(preview);
+    el.appendChild(item);
+  }
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+$('kb-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('kb-text').value.trim();
+  if (!text) return;
+  $('kb-text').value = '';
+
+  const model = $('kb-chat-model').value;
+  if (!model) { alert('Välj en chat-modell.'); return; }
+
+  kb.chat.push({ role: 'user', content: text });
+  appendKbMessage('user', text);
+  const assistant = appendKbMessage('assistant', '');
+  const meta = $('kb-meta');
+  meta.textContent = '…';
+
+  const body = {
+    model,
+    messages: kb.chat,
+    top_k: parseInt($('kb-topk').value, 10),
+    temperature: parseFloat($('kb-temp').value),
+    stream: true,
+  };
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/kb/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      assistant.body.textContent = `Fel: ${res.status} ${err}`;
+      meta.textContent = '';
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let acc = '';
+    let sourcesShown = false;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const event = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of event.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const json = JSON.parse(payload);
+            if (json._sources) {
+              if (!sourcesShown) { appendKbSources(json._sources); sourcesShown = true; }
+              continue;
+            }
+            const delta = json?.choices?.[0]?.delta?.content || json?.choices?.[0]?.message?.content || '';
+            if (delta) {
+              acc += delta;
+              assistant.body.textContent = acc;
+              $('kb-log').scrollTop = $('kb-log').scrollHeight;
+            }
+          } catch {}
+        }
+      }
+    }
+    kb.chat.push({ role: 'assistant', content: acc });
+    meta.textContent = `${model} · ${Math.round(performance.now() - t0)} ms`;
+  } catch (err) {
+    assistant.body.textContent = `Fel: ${err.message}`;
+    meta.textContent = '';
+  }
+});
+
+$('kb-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    $('kb-form').requestSubmit();
+  }
+});
+
 // --- Init ---
-loadConfig().then(loadModels);
+loadConfig().then(loadModels).then(refreshKbStatus).then(loadUsage);

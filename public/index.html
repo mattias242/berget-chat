@@ -15,13 +15,17 @@
           <p class="sub">Test text- och STT-modeller mot api.berget.ai</p>
         </div>
       </div>
-      <div class="status" id="status">…</div>
+      <div class="topbar-right">
+        <a class="usage" id="usage" href="https://console.berget.ai" target="_blank" rel="noopener" title="Klicka för att uppdatera">credits …</a>
+        <div class="status" id="status">…</div>
+      </div>
     </header>
 
     <nav class="tabs">
       <button class="tab active" data-tab="chat">Chat</button>
       <button class="tab" data-tab="stt">Speech-to-text</button>
       <button class="tab" data-tab="embeddings">Embeddings</button>
+      <button class="tab" data-tab="kb">Kunskap</button>
       <button class="tab" data-tab="models">Modeller</button>
     </nav>
 
@@ -121,6 +125,52 @@
             <span id="emb-meta" class="meta"></span>
           </div>
           <pre id="emb-output" class="output"></pre>
+        </div>
+      </section>
+
+      <!-- Knowledge base -->
+      <section class="panel" id="panel-kb">
+        <aside class="sidebar">
+          <label>Chat-modell
+            <select id="kb-chat-model"></select>
+          </label>
+          <label>Embedding-modell
+            <select id="kb-emb-model"></select>
+          </label>
+          <div class="row">
+            <label>Top-K
+              <input type="number" id="kb-topk" value="5" min="1" max="20" step="1" />
+            </label>
+            <label>Temperature
+              <input type="number" id="kb-temp" value="0.3" min="0" max="2" step="0.1" />
+            </label>
+          </div>
+
+          <div class="kb-section">
+            <h4>Grundprompt (Markdown)</h4>
+            <input type="file" id="kb-prompt-file" accept=".md,.markdown,.txt,text/markdown,text/plain" />
+            <p class="meta" id="kb-prompt-status">Ingen prompt vald</p>
+          </div>
+
+          <div class="kb-section">
+            <h4>Kunskapsdokument (PDF)</h4>
+            <input type="file" id="kb-pdf-file" accept=".pdf,application/pdf" multiple />
+            <p class="meta" id="kb-pdf-status"></p>
+            <ul id="kb-doc-list" class="kb-doc-list"></ul>
+          </div>
+
+          <button id="kb-clear" class="ghost">Rensa kunskap</button>
+        </aside>
+
+        <div class="content">
+          <div id="kb-log" class="chat-log"></div>
+          <form id="kb-form" class="chat-input">
+            <textarea id="kb-text" rows="3" placeholder="Fråga något om dina dokument…"></textarea>
+            <div class="actions">
+              <span id="kb-meta" class="meta"></span>
+              <button type="submit" id="kb-send">Skicka</button>
+            </div>
+          </form>
         </div>
       </section>
 
