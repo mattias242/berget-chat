@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Berget Model Tester</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">B</span>
+        <div>
+          <h1>Berget Model Tester</h1>
+          <p class="sub">Test text- och STT-modeller mot api.berget.ai</p>
+        </div>
+      </div>
+      <div class="status" id="status">…</div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="chat">Chat</button>
+      <button class="tab" data-tab="stt">Speech-to-text</button>
+      <button class="tab" data-tab="embeddings">Embeddings</button>
+      <button class="tab" data-tab="models">Modeller</button>
+    </nav>
+
+    <main>
+      <!-- Chat -->
+      <section class="panel active" id="panel-chat">
+        <aside class="sidebar">
+          <label>Modell
+            <select id="chat-model"></select>
+          </label>
+          <label>System prompt
+            <textarea id="chat-system" rows="3" placeholder="Du är en hjälpsam assistent…"></textarea>
+          </label>
+          <div class="row">
+            <label>Temperature
+              <input type="number" id="chat-temp" value="0.7" min="0" max="2" step="0.1" />
+            </label>
+            <label>Max tokens
+              <input type="number" id="chat-maxtokens" value="1024" min="1" step="1" />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="chat-stream" checked /> Streamning
+          </label>
+          <button id="chat-clear" class="ghost">Rensa konversation</button>
+        </aside>
+
+        <div class="content">
+          <div id="chat-log" class="chat-log"></div>
+          <form id="chat-form" class="chat-input">
+            <textarea id="chat-text" rows="3" placeholder="Skriv ett meddelande…"></textarea>
+            <div class="actions">
+              <span id="chat-meta" class="meta"></span>
+              <button type="submit" id="chat-send">Skicka</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- STT -->
+      <section class="panel" id="panel-stt">
+        <aside class="sidebar">
+          <label>Modell
+            <select id="stt-model"></select>
+          </label>
+          <label>Språk (valfritt)
+            <input type="text" id="stt-language" placeholder="sv, en, …" />
+          </label>
+          <label>Prompt (valfritt)
+            <textarea id="stt-prompt" rows="2" placeholder="Kontext eller stavning"></textarea>
+          </label>
+          <label>Format
+            <select id="stt-format">
+              <option value="json" selected>json</option>
+              <option value="text">text</option>
+              <option value="verbose_json">verbose_json</option>
+              <option value="srt">srt</option>
+              <option value="vtt">vtt</option>
+            </select>
+          </label>
+          <label>Temperature
+            <input type="number" id="stt-temp" value="0" min="0" max="1" step="0.1" />
+          </label>
+        </aside>
+
+        <div class="content">
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="stt-file" accept="audio/*,video/*" hidden />
+            <p><strong>Släpp en ljudfil här</strong> eller klicka för att välja</p>
+            <p class="meta" id="stt-filename">Inga filer valda</p>
+          </div>
+          <div class="recorder">
+            <button id="rec-start" type="button">● Spela in</button>
+            <button id="rec-stop" type="button" disabled>■ Stoppa</button>
+            <span id="rec-meta" class="meta"></span>
+          </div>
+          <div class="actions">
+            <button id="stt-run" disabled>Transkribera</button>
+            <span id="stt-meta" class="meta"></span>
+          </div>
+          <pre id="stt-output" class="output"></pre>
+        </div>
+      </section>
+
+      <!-- Embeddings -->
+      <section class="panel" id="panel-embeddings">
+        <aside class="sidebar">
+          <label>Modell
+            <select id="emb-model"></select>
+          </label>
+          <p class="meta">Skriv en eller flera rader. Varje rad blir en input.</p>
+        </aside>
+        <div class="content">
+          <textarea id="emb-input" rows="6" placeholder="Skriv text…"></textarea>
+          <div class="actions">
+            <button id="emb-run">Generera embeddings</button>
+            <span id="emb-meta" class="meta"></span>
+          </div>
+          <pre id="emb-output" class="output"></pre>
+        </div>
+      </section>
+
+      <!-- Models -->
+      <section class="panel" id="panel-models">
+        <div class="content">
+          <div class="actions">
+            <input type="search" id="models-filter" placeholder="Filtrera modeller…" />
+            <button id="models-refresh" class="ghost">Uppdatera</button>
+          </div>
+          <pre id="models-output" class="output"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
