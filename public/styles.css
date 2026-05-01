@@ -224,6 +224,61 @@ button.ghost:hover { background: var(--bg-elev-2); }
   margin-bottom: 4px;
 }
 
+.msg .body > :first-child { margin-top: 0; }
+.msg .body > :last-child { margin-bottom: 0; }
+.msg .body p { margin: 0.5em 0; line-height: 1.5; }
+.msg .body h1, .msg .body h2, .msg .body h3, .msg .body h4 {
+  margin: 0.7em 0 0.3em;
+  line-height: 1.25;
+}
+.msg .body h1 { font-size: 1.25em; }
+.msg .body h2 { font-size: 1.15em; }
+.msg .body h3 { font-size: 1.05em; }
+.msg .body ul, .msg .body ol { margin: 0.4em 0; padding-left: 1.4em; }
+.msg .body li { margin: 0.15em 0; }
+.msg .body blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0.5em 0;
+  padding: 0.1em 0.8em;
+  color: var(--text-dim);
+}
+.msg .body code {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+.msg .body pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 12px;
+  margin: 0.5em 0;
+}
+.msg .body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+.msg .body a { color: var(--accent); }
+.msg .body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+}
+.msg .body th, .msg .body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+}
+.msg .body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.7em 0;
+}
+
 .chat-input {
   display: flex;
   flex-direction: column;

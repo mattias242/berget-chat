@@ -1,5 +1,16 @@
 const $ = (id) => document.getElementById(id);
 
+function renderMarkdown(text) {
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return null;
+  return DOMPurify.sanitize(marked.parse(text || '', { breaks: true, gfm: true }));
+}
+
+function setAssistantBody(body, content) {
+  const html = renderMarkdown(content);
+  if (html != null) body.innerHTML = html;
+  else body.textContent = content;
+}
+
 const state = {
   models: [],
   modelsById: new Map(),
@@ -267,7 +278,7 @@ async function sendChat(text) {
     if (!stream) {
       const data = await res.json();
       acc = data?.choices?.[0]?.message?.content || '';
-      assistantBody.textContent = acc;
+      setAssistantBody(assistantBody, acc);
     } else {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -290,7 +301,7 @@ async function sendChat(text) {
               const delta = json?.choices?.[0]?.delta?.content || json?.choices?.[0]?.message?.content || '';
               if (delta) {
                 acc += delta;
-                assistantBody.textContent = acc;
+                setAssistantBody(assistantBody, acc);
                 $('chat-log').scrollTop = $('chat-log').scrollHeight;
               }
             } catch {}
@@ -627,7 +638,7 @@ $('kb-form').addEventListener('submit', async (e) => {
             const delta = json?.choices?.[0]?.delta?.content || json?.choices?.[0]?.message?.content || '';
             if (delta) {
               acc += delta;
-              assistant.body.textContent = acc;
+              setAssistantBody(assistant.body, acc);
               $('kb-log').scrollTop = $('kb-log').scrollHeight;
             }
           } catch {}
