@@ -88,11 +88,11 @@
         </aside>
 
         <div class="content">
-          <div class="dropzone" id="dropzone">
-            <input type="file" id="stt-file" accept="audio/*,video/*" hidden />
-            <p><strong>Släpp en ljudfil här</strong> eller klicka för att välja</p>
+          <label class="dropzone" id="dropzone" for="stt-file">
+            <input type="file" id="stt-file" accept=".mp3,.m4a,.wav,.aac,.ogg,.flac,.opus,.webm,.mp4,.mov,audio/*,video/*" />
+            <p><strong>Välj eller släpp en ljudfil</strong></p>
             <p class="meta" id="stt-filename">Inga filer valda</p>
-          </div>
+          </label>
           <div class="recorder">
             <button id="rec-start" type="button">● Spela in</button>
             <button id="rec-stop" type="button" disabled>■ Stoppa</button>

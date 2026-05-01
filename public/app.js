@@ -275,7 +275,6 @@ function setSttFile(file) {
   $('stt-run').disabled = !file;
 }
 
-dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
 dropzone.addEventListener('drop', (e) => {
