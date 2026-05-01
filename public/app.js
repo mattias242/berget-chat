@@ -567,29 +567,6 @@ function appendKbMessage(role, content) {
   return { el, body };
 }
 
-function appendKbSources(sources) {
-  if (!sources || sources.length === 0) return;
-  const log = $('kb-log');
-  const el = document.createElement('div');
-  el.className = 'msg sources';
-  el.innerHTML = '<div class="role">källor</div>';
-  for (const s of sources) {
-    const item = document.createElement('div');
-    item.className = 'source-item';
-    const head = document.createElement('div');
-    head.className = 'source-head';
-    head.textContent = `${s.source} · chunk ${s.chunk} · score ${s.score}`;
-    const preview = document.createElement('div');
-    preview.className = 'source-preview';
-    preview.textContent = s.preview;
-    item.appendChild(head);
-    item.appendChild(preview);
-    el.appendChild(item);
-  }
-  log.appendChild(el);
-  log.scrollTop = log.scrollHeight;
-}
-
 $('kb-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = $('kb-text').value.trim();
@@ -631,7 +608,6 @@ $('kb-form').addEventListener('submit', async (e) => {
     const decoder = new TextDecoder();
     let buffer = '';
     let acc = '';
-    let sourcesShown = false;
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -647,10 +623,7 @@ $('kb-form').addEventListener('submit', async (e) => {
           if (payload === '[DONE]') continue;
           try {
             const json = JSON.parse(payload);
-            if (json._sources) {
-              if (!sourcesShown) { appendKbSources(json._sources); sourcesShown = true; }
-              continue;
-            }
+            if (json._sources) continue;
             const delta = json?.choices?.[0]?.delta?.content || json?.choices?.[0]?.message?.content || '';
             if (delta) {
               acc += delta;
