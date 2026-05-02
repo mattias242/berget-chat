@@ -61,16 +61,16 @@ function pickTokens(obj) {
 
 async function loadUsage() {
   const el = $('usage');
+  const debug = $('usage-debug');
   el.classList.remove('bad');
   el.textContent = 'credits …';
   try {
     const r = await fetch('/api/usage');
     const data = await r.json();
+    debug.textContent = `HTTP ${r.status}\n\n${JSON.stringify(data, null, 2)}`;
     if (!r.ok) {
-      const status = data.status ?? r.status;
-      el.textContent = `credits ${status}`;
+      el.textContent = `credits ${data.status ?? r.status}`;
       el.classList.add('bad');
-      el.title = JSON.stringify(data, null, 2);
       console.warn('Usage endpoint failed', data);
       return;
     }
@@ -80,18 +80,26 @@ async function loadUsage() {
     if (info) parts.push(`${info.label}: ${info.value}`);
     if (tokens != null) parts.push(`${tokens.toLocaleString()} tok`);
     el.textContent = parts.length ? parts.join(' · ') : `via ${data.path}`;
-    el.title = `${data.path}\n${JSON.stringify(data.data, null, 2)}`;
   } catch (err) {
     el.textContent = 'credits fel';
     el.classList.add('bad');
-    el.title = err.message;
+    debug.textContent = err.message;
   }
 }
 
 $('usage').addEventListener('click', (e) => {
   if (e.metaKey || e.ctrlKey) return;
   e.preventDefault();
+  const debug = $('usage-debug');
+  debug.hidden = !debug.hidden;
   loadUsage();
+});
+
+document.addEventListener('click', (e) => {
+  const debug = $('usage-debug');
+  if (debug.hidden) return;
+  if (e.target === debug || e.target.closest('#usage') || e.target.closest('#usage-debug')) return;
+  debug.hidden = true;
 });
 
 // --- Status / config ---
