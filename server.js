@@ -48,33 +48,18 @@ app.get('/api/config', (_req, res) => {
 
 app.get('/api/usage', async (_req, res) => {
   if (!requireKey(res)) return;
-  const host = API_BASE.replace(/\/v1\/?$/, '');
-  const candidates = [
-    '/v1/me',
-    '/v1/credits',
-    '/v1/account',
-    '/v1/usage',
-    '/v1/billing/credit_grants',
-    '/v1/dashboard/billing/credit_grants',
-    '/v1/organization',
-    '/v1/balance',
-  ];
-  const tried = [];
-  for (const path of candidates) {
-    try {
-      const r = await fetch(`${host}${path}`, { headers: authHeaders() });
-      tried.push({ path, status: r.status });
-      if (r.ok) {
-        const ct = r.headers.get('content-type') || '';
-        const data = ct.includes('application/json') ? await r.json() : await r.text();
-        res.json({ path, data });
-        return;
-      }
-    } catch (err) {
-      tried.push({ path, error: String(err) });
+  try {
+    const r = await fetch(`${API_BASE}/account`, { headers: authHeaders() });
+    const ct = r.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await r.json() : await r.text();
+    if (!r.ok) {
+      res.status(r.status).json({ error: 'Account endpoint failed', status: r.status, body: data });
+      return;
     }
+    res.json({ path: '/v1/account', data });
+  } catch (err) {
+    res.status(502).json({ error: String(err?.message || err) });
   }
-  res.status(404).json({ error: 'Hittade ingen credits/usage-endpoint.', tried });
 });
 
 app.get('/api/models', async (_req, res) => {
