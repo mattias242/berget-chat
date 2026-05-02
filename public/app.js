@@ -67,9 +67,11 @@ async function loadUsage() {
     const r = await fetch('/api/usage');
     const data = await r.json();
     if (!r.ok) {
-      el.textContent = 'credits ej tillgängligt';
+      const status = data.status ?? r.status;
+      el.textContent = `credits ${status}`;
       el.classList.add('bad');
-      el.title = data.tried ? `Försökte:\n${data.tried.map((t) => `${t.path} → ${t.status ?? t.error}`).join('\n')}` : (data.error || '');
+      el.title = JSON.stringify(data, null, 2);
+      console.warn('Usage endpoint failed', data);
       return;
     }
     const info = pickNumeric(data.data);
