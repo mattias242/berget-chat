@@ -4,11 +4,30 @@ import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8'));
+const VERSION = pkg.version;
+const BUILD = (() => {
+  if (process.env.GIT_SHA) return process.env.GIT_SHA.slice(0, 12);
+  if (process.env.FLY_IMAGE_REF) {
+    const tag = process.env.FLY_IMAGE_REF.split(':').pop() || '';
+    return tag.replace(/^deployment-/, 'fly-').slice(0, 16);
+  }
+  if (process.env.FLY_MACHINE_VERSION) return `fly-${process.env.FLY_MACHINE_VERSION.slice(0, 10)}`;
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'dev';
+  }
+})();
+const BUILD_TIME = new Date().toISOString();
 
 const PORT = process.env.PORT || 3000;
 const API_BASE = (process.env.BERGET_API_BASE || 'https://api.berget.ai/v1').replace(/\/$/, '');
@@ -43,7 +62,7 @@ function requireKey(res) {
 }
 
 app.get('/api/config', (_req, res) => {
-  res.json({ apiBase: API_BASE, hasKey: Boolean(API_KEY) });
+  res.json({ apiBase: API_BASE, hasKey: Boolean(API_KEY), version: VERSION, build: BUILD, buildTime: BUILD_TIME });
 });
 
 app.get('/api/usage', async (_req, res) => {
@@ -402,6 +421,6 @@ app.post('/api/embeddings', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Berget model tester running at http://localhost:${PORT}`);
+  console.log(`Berget model tester v${VERSION} (${BUILD}) running at http://localhost:${PORT}`);
   console.log(`Proxying to ${API_BASE}`);
 });

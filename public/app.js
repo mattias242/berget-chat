@@ -95,6 +95,7 @@ $('usage').addEventListener('click', (e) => {
 // --- Status / config ---
 async function loadConfig() {
   const status = $('status');
+  const version = $('version');
   try {
     const r = await fetch('/api/config');
     const cfg = await r.json();
@@ -105,9 +106,14 @@ async function loadConfig() {
       status.textContent = 'BERGET_API_KEY saknas';
       status.classList.add('bad');
     }
+    if (cfg.version) {
+      version.textContent = `v${cfg.version} · ${cfg.build || '?'}`;
+      version.title = cfg.buildTime ? `Startad ${new Date(cfg.buildTime).toLocaleString()}` : '';
+    }
   } catch {
     status.textContent = 'kunde inte nå servern';
     status.classList.add('bad');
+    version.textContent = 'offline';
   }
 }
 

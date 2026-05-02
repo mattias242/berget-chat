@@ -58,7 +58,8 @@ body {
   align-items: center;
   gap: 8px;
 }
-.usage {
+.usage,
+.version {
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -67,6 +68,7 @@ body {
   text-decoration: none;
   border: 1px solid var(--border);
   white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .usage:hover { color: var(--text); }
 .usage.bad { color: var(--danger); }
