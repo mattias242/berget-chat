@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   mattias:
-    name: Deploy berget-chat--cimwg
+    name: Deploy berget-chat-mattias
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
