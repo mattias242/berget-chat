@@ -1,9 +1,9 @@
-# fly.toml app configuration file for berget-chat--cimwg
+# fly.toml app configuration file for berget-chat-mattias
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'berget-chat--cimwg'
+app = 'berget-chat-mattias'
 primary_region = 'arn'
 
 [build]
