@@ -1,6 +1,6 @@
 {
   "name": "berget-chat",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Web app to test Berget AI text and speech-to-text models",
   "type": "module",
   "main": "server.js",
