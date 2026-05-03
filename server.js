@@ -65,22 +65,6 @@ app.get('/api/config', (_req, res) => {
   res.json({ apiBase: API_BASE, hasKey: Boolean(API_KEY), version: VERSION, build: BUILD, buildTime: BUILD_TIME });
 });
 
-app.get('/api/usage', async (_req, res) => {
-  if (!requireKey(res)) return;
-  try {
-    const r = await fetch(`${API_BASE}/account`, { headers: authHeaders() });
-    const ct = r.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await r.json() : await r.text();
-    if (!r.ok) {
-      res.status(r.status).json({ error: 'Account endpoint failed', status: r.status, body: data });
-      return;
-    }
-    res.json({ path: '/v1/account', data });
-  } catch (err) {
-    res.status(502).json({ error: String(err?.message || err) });
-  }
-});
-
 app.get('/api/models', async (_req, res) => {
   if (!requireKey(res)) return;
   try {

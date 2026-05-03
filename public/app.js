@@ -32,76 +32,6 @@ document.querySelectorAll('.tab').forEach((btn) => {
   });
 });
 
-// --- Usage / credits ---
-function pickNumeric(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  const keys = ['credits', 'credit', 'balance', 'remaining', 'remaining_credits', 'total_remaining', 'available'];
-  for (const k of keys) {
-    if (typeof obj[k] === 'number') return { label: k, value: obj[k] };
-    if (obj[k] && typeof obj[k] === 'object') {
-      const inner = pickNumeric(obj[k]);
-      if (inner) return inner;
-    }
-  }
-  return null;
-}
-
-function pickTokens(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  const keys = ['total_tokens', 'tokens', 'tokens_used', 'usage_tokens'];
-  for (const k of keys) {
-    if (typeof obj[k] === 'number') return obj[k];
-    if (obj[k] && typeof obj[k] === 'object') {
-      const inner = pickTokens(obj[k]);
-      if (inner != null) return inner;
-    }
-  }
-  return null;
-}
-
-async function loadUsage() {
-  const el = $('usage');
-  const debug = $('usage-debug');
-  el.classList.remove('bad');
-  el.textContent = 'credits …';
-  try {
-    const r = await fetch('/api/usage');
-    const data = await r.json();
-    debug.textContent = `HTTP ${r.status}\n\n${JSON.stringify(data, null, 2)}`;
-    if (!r.ok) {
-      el.textContent = `credits ${data.status ?? r.status}`;
-      el.classList.add('bad');
-      console.warn('Usage endpoint failed', data);
-      return;
-    }
-    const info = pickNumeric(data.data);
-    const tokens = pickTokens(data.data);
-    const parts = [];
-    if (info) parts.push(`${info.label}: ${info.value}`);
-    if (tokens != null) parts.push(`${tokens.toLocaleString()} tok`);
-    el.textContent = parts.length ? parts.join(' · ') : `via ${data.path}`;
-  } catch (err) {
-    el.textContent = 'credits fel';
-    el.classList.add('bad');
-    debug.textContent = err.message;
-  }
-}
-
-$('usage').addEventListener('click', (e) => {
-  if (e.metaKey || e.ctrlKey) return;
-  e.preventDefault();
-  const debug = $('usage-debug');
-  debug.hidden = !debug.hidden;
-  loadUsage();
-});
-
-document.addEventListener('click', (e) => {
-  const debug = $('usage-debug');
-  if (debug.hidden) return;
-  if (e.target === debug || e.target.closest('#usage') || e.target.closest('#usage-debug')) return;
-  debug.hidden = true;
-});
-
 // --- Status / config ---
 async function loadConfig() {
   const status = $('status');
@@ -677,4 +607,4 @@ $('kb-text').addEventListener('keydown', (e) => {
 });
 
 // --- Init ---
-loadConfig().then(loadModels).then(refreshKbStatus).then(loadUsage);
+loadConfig().then(loadModels).then(refreshKbStatus);
