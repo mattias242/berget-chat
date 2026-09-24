@@ -413,6 +413,7 @@ const live = {
   currentPartial: '',
   ready: false,
   startTime: 0,
+  pumpTimer: null,
 };
 
 function pcm16Base64(f32) {
@@ -452,92 +453,48 @@ function setLiveMeta(msg) {
   $('live-meta').textContent = msg;
 }
 
-async function startLive() {
-  if (live.ws) return;
+function buildSessionUpdate(rate, { forceServerVad } = {}) {
+  const chunkSecondsRaw = parseInt($('live-chunk').value, 10);
+  const useServerVad = forceServerVad ?? $('live-vad').checked;
+  const languages = $('live-lang').value.split(',').map((s) => s.trim()).filter(Boolean);
+  const transcription = {
+    model: 'klang/pianissimo',
+    languages: languages.length ? languages : ['sv'],
+  };
+  if (chunkSecondsRaw > 0) transcription.chunk_seconds = chunkSecondsRaw;
+  const input = { format: { type: 'audio/pcm', rate }, transcription };
+  if (useServerVad) input.turn_detection = { type: 'server_vad' };
+  return {
+    type: 'session.update',
+    session: { type: 'transcription', audio: { input } },
+  };
+}
 
-  $('live-start').disabled = true;
-  $('live-stop').disabled = false;
+function openLiveWS(rate, onReady, { onClose, sessionOpts } = {}) {
   live.finalized = '';
   live.currentPartial = '';
   live.ready = false;
   live.startTime = Date.now();
   renderLiveOutput();
 
-  let audioCtx, mediaStream, source, worklet;
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-  } catch (err) {
-    setLiveMeta(`mic-fel: ${err.message}`);
-    stopLive();
-    return;
-  }
-
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    await audioCtx.audioWorklet.addModule('/pcm-worklet.js');
-    source = audioCtx.createMediaStreamSource(mediaStream);
-    worklet = new AudioWorkletNode(audioCtx, 'pcm-capture');
-    // 100 ms frames at native sample rate
-    const target = Math.round(audioCtx.sampleRate / 10);
-    worklet.port.postMessage({ type: 'config', samples: target });
-    source.connect(worklet);
-  } catch (err) {
-    setLiveMeta(`audio-fel: ${err.message}`);
-    for (const t of mediaStream.getTracks()) t.stop();
-    if (audioCtx) audioCtx.close();
-    stopLive();
-    return;
-  }
-
-  live.audioCtx = audioCtx;
-  live.mediaStream = mediaStream;
-  live.source = source;
-  live.worklet = worklet;
-
   const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${wsProto}//${location.host}/api/stt/stream`);
   live.ws = ws;
 
   ws.onopen = () => {
-    const chunkSecondsRaw = parseInt($('live-chunk').value, 10);
-    const useServerVad = $('live-vad').checked;
-    const languages = $('live-lang').value.split(',').map((s) => s.trim()).filter(Boolean);
-    const transcription = {
-      model: 'klang/pianissimo',
-      languages: languages.length ? languages : ['sv'],
-    };
-    if (chunkSecondsRaw > 0) transcription.chunk_seconds = chunkSecondsRaw;
-
-    const input = {
-      format: { type: 'audio/pcm', rate: audioCtx.sampleRate },
-      transcription,
-    };
-    if (useServerVad) input.turn_detection = { type: 'server_vad' };
-
-    ws.send(JSON.stringify({
-      type: 'session.update',
-      session: { type: 'transcription', audio: { input } },
-    }));
+    ws.send(JSON.stringify(buildSessionUpdate(rate, sessionOpts || {})));
     setLiveMeta('ansluter…');
   };
 
   ws.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
-
     switch (ev.type) {
       case 'session.updated': {
         live.ready = true;
         const applied = ev.session?.audio?.input?.transcription;
         setLiveMeta(`ansluten · ${applied?.model} · chunk_seconds=${applied?.chunk_seconds ?? 'default'}`);
-        // Start piping audio only after session ready
-        worklet.port.onmessage = (m) => {
-          if (ws.readyState !== 1) return;
-          const b64 = pcm16Base64(m.data);
-          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
-        };
+        try { onReady?.(ws); } catch (err) { setLiveMeta(`fel: ${err.message}`); }
         break;
       }
       case 'conversation.item.input_audio_transcription.delta':
@@ -559,11 +516,123 @@ async function startLive() {
   ws.onerror = () => setLiveMeta('WebSocket-fel');
   ws.onclose = (e) => {
     setLiveMeta(`ansluten stängd (${e.code})`);
+    onClose?.(e);
     teardownLive();
   };
+
+  return ws;
+}
+
+async function startLive() {
+  if (live.ws) return;
+
+  $('live-start').disabled = true;
+  $('live-stop').disabled = false;
+  $('live-file').disabled = true;
+
+  let audioCtx, mediaStream, source, worklet;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (err) {
+    setLiveMeta(`mic-fel: ${err.message}`);
+    teardownLive();
+    return;
+  }
+
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.audioWorklet.addModule('/pcm-worklet.js');
+    source = audioCtx.createMediaStreamSource(mediaStream);
+    worklet = new AudioWorkletNode(audioCtx, 'pcm-capture');
+    const target = Math.round(audioCtx.sampleRate / 10);
+    worklet.port.postMessage({ type: 'config', samples: target });
+    source.connect(worklet);
+  } catch (err) {
+    setLiveMeta(`audio-fel: ${err.message}`);
+    for (const t of mediaStream.getTracks()) t.stop();
+    if (audioCtx) audioCtx.close();
+    teardownLive();
+    return;
+  }
+
+  live.audioCtx = audioCtx;
+  live.mediaStream = mediaStream;
+  live.source = source;
+  live.worklet = worklet;
+
+  openLiveWS(audioCtx.sampleRate, (ws) => {
+    worklet.port.onmessage = (m) => {
+      if (ws.readyState !== 1) return;
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcm16Base64(m.data) }));
+    };
+  });
+}
+
+function mixToMono(buffer) {
+  const channels = buffer.numberOfChannels;
+  const len = buffer.length;
+  if (channels === 1) return buffer.getChannelData(0);
+  const out = new Float32Array(len);
+  for (let c = 0; c < channels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += data[i];
+  }
+  for (let i = 0; i < len; i++) out[i] /= channels;
+  return out;
+}
+
+async function startFileStream(file) {
+  if (live.ws) { alert('Live-session pågår redan. Stoppa först.'); return; }
+
+  $('live-start').disabled = true;
+  $('live-stop').disabled = false;
+  $('live-file').disabled = true;
+  setLiveMeta(`avkodar ${file.name}…`);
+
+  let mono, rate, totalMs;
+  try {
+    const buf = await file.arrayBuffer();
+    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await decodeCtx.decodeAudioData(buf);
+    mono = mixToMono(audioBuffer);
+    rate = audioBuffer.sampleRate;
+    totalMs = (mono.length / rate) * 1000;
+    decodeCtx.close();
+  } catch (err) {
+    setLiveMeta(`avkodningsfel: ${err.message}`);
+    teardownLive();
+    return;
+  }
+
+  // Files must not run server_vad since we commit at the end ourselves.
+  openLiveWS(rate, (ws) => {
+    const frameSamples = Math.round(rate / 10); // 100 ms
+    const framePauseMs = 20;                    // ~5× realtime
+    let i = 0;
+    live.pumpTimer = setInterval(() => {
+      if (!ws || ws.readyState !== 1) { clearInterval(live.pumpTimer); live.pumpTimer = null; return; }
+      if (i >= mono.length) {
+        clearInterval(live.pumpTimer);
+        live.pumpTimer = null;
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        setLiveMeta('väntar på slutlig transkription…');
+        // Close a moment after the last audio, giving the server time to emit completed.
+        setTimeout(() => { try { ws.close(); } catch {} }, 2500);
+        return;
+      }
+      const slice = mono.subarray(i, Math.min(i + frameSamples, mono.length));
+      ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: pcm16Base64(slice) }));
+      i += frameSamples;
+      const pct = Math.min(100, Math.round((i / mono.length) * 100));
+      setLiveMeta(`streamar ${(totalMs / 1000).toFixed(1)} s ljud… ${pct}%`);
+    }, framePauseMs);
+  }, { sessionOpts: { forceServerVad: false } });
 }
 
 function teardownLive() {
+  if (live.pumpTimer) { clearInterval(live.pumpTimer); live.pumpTimer = null; }
   if (live.worklet) { try { live.worklet.port.onmessage = null; live.worklet.disconnect(); } catch {} }
   if (live.source) { try { live.source.disconnect(); } catch {} }
   if (live.mediaStream) { try { live.mediaStream.getTracks().forEach((t) => t.stop()); } catch {} }
@@ -576,24 +645,29 @@ function teardownLive() {
   live.ready = false;
   $('live-start').disabled = false;
   $('live-stop').disabled = true;
+  $('live-file').disabled = false;
+  $('live-file').value = '';
 }
 
 function stopLive() {
   const ws = live.ws;
+  if (live.pumpTimer) { clearInterval(live.pumpTimer); live.pumpTimer = null; }
   if (ws && ws.readyState === 1) {
     try { ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' })); } catch {}
-    // Give the server a moment to emit the final transcript before closing.
     setTimeout(() => { try { ws.close(); } catch {} teardownLive(); }, 800);
   } else {
     teardownLive();
   }
-  // Immediately stop the mic so nothing new is queued
   if (live.mediaStream) { try { live.mediaStream.getTracks().forEach((t) => t.stop()); } catch {} }
   if (live.worklet) { try { live.worklet.port.onmessage = null; } catch {} }
 }
 
 $('live-start').addEventListener('click', startLive);
 $('live-stop').addEventListener('click', stopLive);
+$('live-file').addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (file) startFileStream(file);
+});
 
 // --- Embeddings ---
 $('emb-run').addEventListener('click', async () => {

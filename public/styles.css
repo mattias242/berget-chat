@@ -383,6 +383,18 @@ button.ghost:hover { background: var(--bg-elev-2); }
 }
 .live-final { color: var(--text); }
 .live-partial { color: var(--text-dim); font-style: italic; }
+.live-file-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.live-file-picker input[type="file"] { color: var(--text); }
 
 .kb-section {
   border-top: 1px solid var(--border);
