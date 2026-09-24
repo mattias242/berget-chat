@@ -62,11 +62,12 @@ function classifyModel(model) {
   const id = (model.id || '').toLowerCase();
   const owner = (model.owned_by || '').toLowerCase();
   const types = new Set();
-  if (/whisper|stt|kb-whisper|asr|transcrib/.test(id)) types.add('stt');
+  const isStt = /whisper|stt|kb-whisper|asr|transcrib|pianissimo|klang|voxtral/.test(id) || /klang|kblab/.test(owner);
+  if (isStt) types.add('stt');
   if (/embed|e5|bge(?!.*rerank)/.test(id)) types.add('embedding');
   if (/rerank/.test(id)) types.add('rerank');
-  if (/tts|speech|voice/.test(id) && !/whisper/.test(id)) types.add('tts');
-  if (/moderation/.test(id)) types.add('moderation');
+  if (/tts|xtts|speech(?!-to)|voice/.test(id) && !isStt) types.add('tts');
+  if (/moderation|guard/.test(id)) types.add('moderation');
   if (types.size === 0) types.add('chat');
   return { types, id: model.id, owned_by: owner };
 }
