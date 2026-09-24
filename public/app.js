@@ -62,11 +62,13 @@ function classifyModel(model) {
   const id = (model.id || '').toLowerCase();
   const owner = (model.owned_by || '').toLowerCase();
   const types = new Set();
-  const isStt = /whisper|stt|kb-whisper|asr|transcrib|pianissimo|klang|voxtral/.test(id) || /klang|kblab/.test(owner);
-  if (isStt) types.add('stt');
+  const isStream = /pianissimo/.test(id) || /^klang/.test(owner);
+  const isSttBatch = !isStream && (/whisper|stt|kb-whisper|asr|transcrib|voxtral/.test(id) || /kblab/.test(owner));
+  if (isStream) types.add('stt-stream');
+  if (isSttBatch) types.add('stt');
   if (/embed|e5|bge(?!.*rerank)/.test(id)) types.add('embedding');
   if (/rerank/.test(id)) types.add('rerank');
-  if (/tts|xtts|speech(?!-to)|voice/.test(id) && !isStt) types.add('tts');
+  if (/tts|xtts|speech(?!-to)|voice/.test(id) && !isSttBatch && !isStream) types.add('tts');
   if (/moderation|guard/.test(id)) types.add('moderation');
   if (types.size === 0) types.add('chat');
   return { types, id: model.id, owned_by: owner };
