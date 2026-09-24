@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const LIVE_MODEL = 'klang/pianissimo';
 
 function renderMarkdown(text) {
   if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return null;
@@ -85,12 +86,16 @@ function renderModelSelects() {
   const chatModels = [];
   const sttModels = [];
   const embModels = [];
+  const streamModels = [];
   for (const m of state.models) {
     const info = classifyModel(m);
     if (info.types.has('chat')) chatModels.push(m);
     if (info.types.has('stt')) sttModels.push(m);
+    if (info.types.has('stt-stream')) streamModels.push(m);
     if (info.types.has('embedding')) embModels.push(m);
   }
+  // The realtime endpoint serves klang/pianissimo even if /v1/models doesn't list it.
+  if (!streamModels.some((m) => m.id === LIVE_MODEL)) streamModels.push({ id: LIVE_MODEL });
 
   function fill(select, list, fallbackLabel) {
     if (list.length === 0) {
@@ -110,6 +115,15 @@ function renderModelSelects() {
 
   fill(chatSel, chatModels, 'chat-modeller');
   fill(sttSel, sttModels, 'stt-modeller');
+  const liveGroup = document.createElement('optgroup');
+  liveGroup.label = 'Live / streaming';
+  for (const m of streamModels) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = `${m.id} (live)`;
+    liveGroup.appendChild(opt);
+  }
+  sttSel.appendChild(liveGroup);
   fill(embSel, embModels, 'embedding-modeller');
   fill(kbChatSel, chatModels, 'chat-modeller');
   fill(kbEmbSel, embModels, 'embedding-modeller');
@@ -394,12 +408,29 @@ $('stt-run').addEventListener('click', async () => {
 });
 
 // --- STT: batch vs live subtabs ---
+function isLiveModel(id) {
+  return /pianissimo/i.test(id || '');
+}
+
+function setSttMode(mode) {
+  document.querySelectorAll('.stt-tab').forEach((b) => b.classList.toggle('active', b.dataset.sttMode === mode));
+  document.querySelectorAll('.stt-mode').forEach((m) => m.classList.toggle('active', m.dataset.sttMode === mode));
+  const sel = $('stt-model');
+  if (mode === 'live' && !isLiveModel(sel.value)) {
+    const opt = [...sel.options].find((o) => isLiveModel(o.value));
+    if (opt) sel.value = opt.value;
+  } else if (mode === 'batch' && isLiveModel(sel.value)) {
+    const opt = [...sel.options].find((o) => o.value && !isLiveModel(o.value));
+    if (opt) sel.value = opt.value;
+  }
+}
+
 document.querySelectorAll('.stt-tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const mode = btn.dataset.sttMode;
-    document.querySelectorAll('.stt-tab').forEach((b) => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.stt-mode').forEach((m) => m.classList.toggle('active', m.dataset.sttMode === mode));
-  });
+  btn.addEventListener('click', () => setSttMode(btn.dataset.sttMode));
+});
+
+$('stt-model').addEventListener('change', (e) => {
+  setSttMode(isLiveModel(e.target.value) ? 'live' : 'batch');
 });
 
 // --- STT: live streaming (Pianissimo) ---
@@ -458,7 +489,7 @@ function buildSessionUpdate(rate, { forceServerVad } = {}) {
   const useServerVad = forceServerVad ?? $('live-vad').checked;
   const languages = $('live-lang').value.split(',').map((s) => s.trim()).filter(Boolean);
   const transcription = {
-    model: 'klang/pianissimo',
+    model: LIVE_MODEL,
     languages: languages.length ? languages : ['sv'],
   };
   if (chunkSecondsRaw > 0) transcription.chunk_seconds = chunkSecondsRaw;
