@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { WebSocketServer, WebSocket as UpstreamWS } from 'ws';
 
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
@@ -407,4 +408,55 @@ app.post('/api/embeddings', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Berget model tester v${VERSION} (${BUILD}) running at http://localhost:${PORT}`);
   console.log(`Proxying to ${API_BASE}`);
+}).on('listening', function () {
+  const server = this;
+  const wsUpstream = (API_BASE.replace(/^http/, 'ws')) + '/realtime?intent=transcription';
+  const wss = new WebSocketServer({ server, path: '/api/stt/stream' });
+
+  wss.on('connection', (client) => {
+    if (!API_KEY) {
+      client.send(JSON.stringify({ type: 'error', error: { message: 'server saknar BERGET_API_KEY' } }));
+      client.close(1011, 'no api key');
+      return;
+    }
+
+    const upstream = new UpstreamWS(wsUpstream, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+
+    const queue = [];
+    let upstreamOpen = false;
+
+    upstream.on('open', () => {
+      upstreamOpen = true;
+      for (const msg of queue) upstream.send(msg);
+      queue.length = 0;
+    });
+
+    upstream.on('message', (data) => {
+      if (client.readyState === 1) client.send(data.toString());
+    });
+
+    upstream.on('close', (code, reason) => {
+      if (client.readyState === 1) {
+        try { client.close(code === 1006 ? 1011 : code, reason?.toString?.() || ''); } catch {}
+      }
+    });
+
+    upstream.on('error', (err) => {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({ type: 'error', error: { message: `upstream: ${err.message}` } }));
+        try { client.close(1011, 'upstream error'); } catch {}
+      }
+    });
+
+    client.on('message', (data) => {
+      const str = data.toString();
+      if (upstreamOpen && upstream.readyState === 1) upstream.send(str);
+      else queue.push(str);
+    });
+
+    client.on('close', () => { try { upstream.close(); } catch {} });
+    client.on('error', () => { try { upstream.close(); } catch {} });
+  });
 });

@@ -340,6 +340,50 @@ button.ghost:hover { background: var(--bg-elev-2); }
   min-height: 200px;
 }
 
+.stt-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.stt-tab {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.stt-tab.active {
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border-color: var(--accent);
+}
+.stt-mode { display: none; flex-direction: column; gap: 12px; }
+.stt-mode.active { display: flex; }
+.stt-mode code {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+.live-output {
+  background: #0a0d12;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  flex: 1;
+  overflow: auto;
+  min-height: 240px;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.live-final { color: var(--text); }
+.live-partial { color: var(--text-dim); font-style: italic; }
+
 .kb-section {
   border-top: 1px solid var(--border);
   padding-top: 12px;

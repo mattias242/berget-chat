@@ -391,6 +391,208 @@ $('stt-run').addEventListener('click', async () => {
   }
 });
 
+// --- STT: batch vs live subtabs ---
+document.querySelectorAll('.stt-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.sttMode;
+    document.querySelectorAll('.stt-tab').forEach((b) => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.stt-mode').forEach((m) => m.classList.toggle('active', m.dataset.sttMode === mode));
+  });
+});
+
+// --- STT: live streaming (Pianissimo) ---
+const live = {
+  ws: null,
+  audioCtx: null,
+  worklet: null,
+  mediaStream: null,
+  source: null,
+  finalized: '',
+  currentPartial: '',
+  ready: false,
+  startTime: 0,
+};
+
+function pcm16Base64(f32) {
+  const int16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  const bytes = new Uint8Array(int16.buffer);
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+function renderLiveOutput() {
+  const el = $('live-output');
+  el.innerHTML = '';
+  if (live.finalized) {
+    const done = document.createElement('span');
+    done.className = 'live-final';
+    done.textContent = live.finalized;
+    el.appendChild(done);
+  }
+  if (live.currentPartial) {
+    const p = document.createElement('span');
+    p.className = 'live-partial';
+    p.textContent = live.currentPartial;
+    el.appendChild(p);
+  }
+  el.scrollTop = el.scrollHeight;
+}
+
+function setLiveMeta(msg) {
+  $('live-meta').textContent = msg;
+}
+
+async function startLive() {
+  if (live.ws) return;
+
+  $('live-start').disabled = true;
+  $('live-stop').disabled = false;
+  live.finalized = '';
+  live.currentPartial = '';
+  live.ready = false;
+  live.startTime = Date.now();
+  renderLiveOutput();
+
+  let audioCtx, mediaStream, source, worklet;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (err) {
+    setLiveMeta(`mic-fel: ${err.message}`);
+    stopLive();
+    return;
+  }
+
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.audioWorklet.addModule('/pcm-worklet.js');
+    source = audioCtx.createMediaStreamSource(mediaStream);
+    worklet = new AudioWorkletNode(audioCtx, 'pcm-capture');
+    // 100 ms frames at native sample rate
+    const target = Math.round(audioCtx.sampleRate / 10);
+    worklet.port.postMessage({ type: 'config', samples: target });
+    source.connect(worklet);
+  } catch (err) {
+    setLiveMeta(`audio-fel: ${err.message}`);
+    for (const t of mediaStream.getTracks()) t.stop();
+    if (audioCtx) audioCtx.close();
+    stopLive();
+    return;
+  }
+
+  live.audioCtx = audioCtx;
+  live.mediaStream = mediaStream;
+  live.source = source;
+  live.worklet = worklet;
+
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${wsProto}//${location.host}/api/stt/stream`);
+  live.ws = ws;
+
+  ws.onopen = () => {
+    const chunkSecondsRaw = parseInt($('live-chunk').value, 10);
+    const useServerVad = $('live-vad').checked;
+    const languages = $('live-lang').value.split(',').map((s) => s.trim()).filter(Boolean);
+    const transcription = {
+      model: 'klang/pianissimo',
+      languages: languages.length ? languages : ['sv'],
+    };
+    if (chunkSecondsRaw > 0) transcription.chunk_seconds = chunkSecondsRaw;
+
+    const input = {
+      format: { type: 'audio/pcm', rate: audioCtx.sampleRate },
+      transcription,
+    };
+    if (useServerVad) input.turn_detection = { type: 'server_vad' };
+
+    ws.send(JSON.stringify({
+      type: 'session.update',
+      session: { type: 'transcription', audio: { input } },
+    }));
+    setLiveMeta('ansluter…');
+  };
+
+  ws.onmessage = (e) => {
+    let ev;
+    try { ev = JSON.parse(e.data); } catch { return; }
+
+    switch (ev.type) {
+      case 'session.updated': {
+        live.ready = true;
+        const applied = ev.session?.audio?.input?.transcription;
+        setLiveMeta(`ansluten · ${applied?.model} · chunk_seconds=${applied?.chunk_seconds ?? 'default'}`);
+        // Start piping audio only after session ready
+        worklet.port.onmessage = (m) => {
+          if (ws.readyState !== 1) return;
+          const b64 = pcm16Base64(m.data);
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64 }));
+        };
+        break;
+      }
+      case 'conversation.item.input_audio_transcription.delta':
+        live.currentPartial += ev.delta || '';
+        renderLiveOutput();
+        break;
+      case 'conversation.item.input_audio_transcription.completed':
+        live.finalized += (live.finalized ? ' ' : '') + (ev.transcript || live.currentPartial);
+        live.currentPartial = '';
+        renderLiveOutput();
+        break;
+      case 'conversation.item.input_audio_transcription.failed':
+      case 'error':
+        setLiveMeta(`fel: ${JSON.stringify(ev.error || ev)}`);
+        break;
+    }
+  };
+
+  ws.onerror = () => setLiveMeta('WebSocket-fel');
+  ws.onclose = (e) => {
+    setLiveMeta(`ansluten stängd (${e.code})`);
+    teardownLive();
+  };
+}
+
+function teardownLive() {
+  if (live.worklet) { try { live.worklet.port.onmessage = null; live.worklet.disconnect(); } catch {} }
+  if (live.source) { try { live.source.disconnect(); } catch {} }
+  if (live.mediaStream) { try { live.mediaStream.getTracks().forEach((t) => t.stop()); } catch {} }
+  if (live.audioCtx) { try { live.audioCtx.close(); } catch {} }
+  live.worklet = null;
+  live.source = null;
+  live.mediaStream = null;
+  live.audioCtx = null;
+  live.ws = null;
+  live.ready = false;
+  $('live-start').disabled = false;
+  $('live-stop').disabled = true;
+}
+
+function stopLive() {
+  const ws = live.ws;
+  if (ws && ws.readyState === 1) {
+    try { ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' })); } catch {}
+    // Give the server a moment to emit the final transcript before closing.
+    setTimeout(() => { try { ws.close(); } catch {} teardownLive(); }, 800);
+  } else {
+    teardownLive();
+  }
+  // Immediately stop the mic so nothing new is queued
+  if (live.mediaStream) { try { live.mediaStream.getTracks().forEach((t) => t.stop()); } catch {} }
+  if (live.worklet) { try { live.worklet.port.onmessage = null; } catch {} }
+}
+
+$('live-start').addEventListener('click', startLive);
+$('live-stop').addEventListener('click', stopLive);
+
 // --- Embeddings ---
 $('emb-run').addEventListener('click', async () => {
   const model = $('emb-model').value;

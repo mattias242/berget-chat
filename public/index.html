@@ -93,21 +93,49 @@
         </aside>
 
         <div class="content">
-          <label class="dropzone" id="dropzone" for="stt-file">
-            <input type="file" id="stt-file" accept=".mp3,.m4a,.wav,.aac,.ogg,.flac,.opus,.webm,.mp4,.mov,audio/*,video/*" />
-            <p><strong>Välj eller släpp en ljudfil</strong></p>
-            <p class="meta" id="stt-filename">Inga filer valda</p>
-          </label>
-          <div class="recorder">
-            <button id="rec-start" type="button">● Spela in</button>
-            <button id="rec-stop" type="button" disabled>■ Stoppa</button>
-            <span id="rec-meta" class="meta"></span>
+          <div class="stt-tabs">
+            <button class="stt-tab active" data-stt-mode="batch">Batch (fil / inspelning)</button>
+            <button class="stt-tab" data-stt-mode="live">Live (Pianissimo)</button>
           </div>
-          <div class="actions">
-            <button id="stt-run" disabled>Transkribera</button>
-            <span id="stt-meta" class="meta"></span>
+
+          <div class="stt-mode active" data-stt-mode="batch">
+            <label class="dropzone" id="dropzone" for="stt-file">
+              <input type="file" id="stt-file" accept=".mp3,.m4a,.wav,.aac,.ogg,.flac,.opus,.webm,.mp4,.mov,audio/*,video/*" />
+              <p><strong>Välj eller släpp en ljudfil</strong></p>
+              <p class="meta" id="stt-filename">Inga filer valda</p>
+            </label>
+            <div class="recorder">
+              <button id="rec-start" type="button">● Spela in</button>
+              <button id="rec-stop" type="button" disabled>■ Stoppa</button>
+              <span id="rec-meta" class="meta"></span>
+            </div>
+            <div class="actions">
+              <button id="stt-run" disabled>Transkribera</button>
+              <span id="stt-meta" class="meta"></span>
+            </div>
+            <pre id="stt-output" class="output"></pre>
           </div>
-          <pre id="stt-output" class="output"></pre>
+
+          <div class="stt-mode" data-stt-mode="live">
+            <p class="meta">Streamar mikrofonen till <code>klang/pianissimo</code> via <code>wss://api.berget.ai/v1/realtime</code>. Text visas allteftersom du pratar.</p>
+            <div class="row">
+              <label>Språk
+                <input type="text" id="live-lang" value="sv" />
+              </label>
+              <label>chunk_seconds
+                <input type="number" id="live-chunk" value="1" min="0" max="30" step="1" />
+              </label>
+            </div>
+            <label class="check">
+              <input type="checkbox" id="live-vad" /> server_vad (segmentera på tystnad)
+            </label>
+            <div class="recorder">
+              <button id="live-start" type="button">● Starta mikrofon</button>
+              <button id="live-stop" type="button" disabled>■ Stoppa</button>
+              <span id="live-meta" class="meta"></span>
+            </div>
+            <div id="live-output" class="live-output"></div>
+          </div>
         </div>
       </section>
 
